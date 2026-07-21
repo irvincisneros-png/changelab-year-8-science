@@ -9,9 +9,9 @@ export async function generateMetadata(): Promise<Metadata> {
   const requestHeaders = await headers();
   const host = requestHeaders.get("x-forwarded-host") ?? requestHeaders.get("host") ?? "localhost:3000";
   const protocol = requestHeaders.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  const imageUrl = `${protocol}://${host}/og-v2.png`;
-  const title = "Heat Transfer Lab | Year 8 Science";
-  const description = "An interactive Year 8 science simulator for conduction, convection and radiation.";
+  const imageUrl = `${protocol}://${host}/og-change-lab.png`;
+  const title = "ChangeLab | Year 8 Science simulations";
+  const description = "Interactive Year 8 science simulations for energy transfer, energy stores and a growing study of change.";
 
   return {
     title,
@@ -21,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> {
       title,
       description,
       type: "website",
-      images: [{ url: imageUrl, width: 1672, height: 936, alt: "Heat Transfer Lab: conduction, convection and radiation" }],
+      images: [{ url: imageUrl, width: 1672, height: 936, alt: "ChangeLab energy systems with a rover, lifted crate, spring, insulated pod and battery" }],
     },
     twitter: { card: "summary_large_image", title, description, images: [imageUrl] },
   };

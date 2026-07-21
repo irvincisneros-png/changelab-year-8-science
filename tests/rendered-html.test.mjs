@@ -1,91 +1,62 @@
 import assert from "node:assert/strict";
-import { access, readFile, readdir } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
-const developmentPreviewMeta =
-  /<meta(?=[^>]*\bname=["']codex-preview["'])(?=[^>]*\bcontent=["']development["'])[^>]*>/i;
-const templateRoot = new URL("../", import.meta.url);
-const previewRoot = new URL("../app/_sites-preview/", import.meta.url);
-
-async function render() {
+async function render(pathname = "/") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
-  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}`);
+  workerUrl.searchParams.set("test", `${process.pid}-${Date.now()}-${pathname}`);
   const { default: worker } = await import(workerUrl.href);
 
   return worker.fetch(
-    new Request("http://localhost/", {
-      headers: { accept: "text/html" },
-    }),
-    {
-      ASSETS: {
-        fetch: async () => new Response("Not found", { status: 404 }),
-      },
-    },
-    {
-      waitUntil() {},
-      passThroughOnException() {},
-    },
+    new Request(`http://localhost${pathname}`, { headers: { accept: "text/html" } }),
+    { ASSETS: { fetch: async () => new Response("Not found", { status: 404 }) } },
+    { waitUntil() {}, passThroughOnException() {} },
   );
 }
 
-test("server-renders the starter loading skeleton", async () => {
-  const response = await render();
-  assert.equal(response.status, 200);
-  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+test("server-renders the ChangeLab home and outcome catalogue", async () => {
+  const home = await render("/");
+  assert.equal(home.status, 200);
+  assert.match(home.headers.get("content-type") ?? "", /^text\/html\b/i);
+  const homeHtml = await home.text();
+  assert.match(homeHtml, /ChangeLab/);
+  assert.match(homeHtml, /Start Energy Stores/);
+  assert.match(homeHtml, /Heat Transfer Lab/);
+  assert.match(homeHtml, /Energy Vault/);
+  assert.match(homeHtml, /og-change-lab\.png/);
 
-  const html = await response.text();
-  assert.match(html, developmentPreviewMeta);
-  assert.match(html, /<title>Your site is taking shape<\/title>/i);
-  assert.match(html, /Building your site/);
-  assert.match(html, /Your site is taking shape/);
-  assert.match(
-    html,
-    /Your first version will appear here automatically when it’s ready\./,
-  );
-  assert.doesNotMatch(html, /Codex/);
-  assert.match(html, /react-loading-skeleton/);
-  assert.match(html, /role="status"/);
+  const catalogue = await render("/play");
+  assert.equal(catalogue.status, 200);
+  const catalogueHtml = await catalogue.text();
+  assert.match(catalogueHtml, /7\.1\.1/);
+  assert.match(catalogueHtml, /7\.1\.2/);
+  assert.match(catalogueHtml, /six evidence-led missions/);
 });
 
-test("keeps the loading skeleton scoped and disposable", async () => {
-  const [preview, css, page, layout, packageJson, files] = await Promise.all([
-    readFile(new URL("SkeletonPreview.tsx", previewRoot), "utf8"),
-    readFile(new URL("preview.css", previewRoot), "utf8"),
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../package.json", import.meta.url), "utf8"),
-    readdir(previewRoot),
-  ]);
+test("server-renders the Energy Stores mission interface", async () => {
+  const response = await render("/play/7-1-2");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Energy Stores/);
+  assert.match(html, /Storm Station 08/);
+  assert.match(html, /Hear Mr\. Cisneros/);
+  assert.match(html, /Mission brief/);
+  assert.match(html, /Evidence lenses/);
+  assert.doesNotMatch(html, />Vin</);
+});
 
-  assert.deepEqual(files.sort(), ["SkeletonPreview.tsx", "preview.css"]);
-  assert.match(preview, /from "react-loading-skeleton"/);
-  assert.match(preview, /baseColor="#eceae7"/);
-  assert.match(preview, /highlightColor="#f9f8f6"/);
-  assert.match(preview, /duration=\{2\.8\}/);
-  assert.match(preview, /sites-skeleton-search-placeholder/);
-  assert.match(packageJson, /"react-loading-skeleton": "3\.5\.0"/);
+test("all six approved mission narrations and generated artwork are packaged", async () => {
+  const assets = [
+    "mr-cisneros-energy-kinetic.mp3",
+    "mr-cisneros-energy-gravitational.mp3",
+    "mr-cisneros-energy-elastic.mp3",
+    "mr-cisneros-energy-thermal.mp3",
+    "mr-cisneros-energy-chemical.mp3",
+    "mr-cisneros-energy-vault.mp3",
+  ];
+  await Promise.all(assets.map((name) => access(new URL(`../public/audio/${name}`, import.meta.url))));
+  await access(new URL("../public/og-change-lab.png", import.meta.url));
 
-  const shellIndex = preview.indexOf('className="sites-skeleton-shell"');
-  const statusIndex = preview.indexOf('className="sites-skeleton-status"');
-  assert.ok(shellIndex >= 0 && statusIndex > shellIndex);
-  assert.match(css, /position:\s*fixed/);
-  assert.match(css, /inset:\s*0/);
-  assert.match(css, /opacity:\s*0\.52/);
-  assert.match(css, /prefers-reduced-motion:\s*reduce/);
-  assert.doesNotMatch(css, /#020617|canvas|pets|progress/i);
-  assert.doesNotMatch(
-    preview,
-    /loading-spinner|status-mark|status-progress|canvas|cookie|random/i,
-  );
-
-  assert.match(page, /export const metadata:\s*Metadata/);
-  assert.match(page, /"codex-preview": "development"/);
-  assert.match(page, /<SkeletonPreview \/>/);
-  assert.match(layout, /title:\s*"Starter Project"/);
-  assert.doesNotMatch(layout, /codex-preview|_sites-preview|themeColor|\bViewport\b/);
-  assert.doesNotMatch(css, /(^|\s)(html|body)\s*\{/m);
-
-  await assert.rejects(
-    access(new URL("public/_sites-preview", templateRoot)),
-  );
+  const component = await readFile(new URL("../app/components/EnergyVault.tsx", import.meta.url), "utf8");
+  for (const name of assets) assert.match(component, new RegExp(name.replaceAll(".", "\\.")));
 });
