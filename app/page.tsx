@@ -1,9 +1,44 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type ScenarioId = "conduction" | "convection" | "radiation" | "mastery";
 type Result = { success: boolean; title: string; explanation: string; stars: number };
+type Theme = "system" | "dark" | "light";
+type TextScale = 1 | 1.15 | 1.3;
+type InsulationLevel = "low" | "medium" | "high";
+type FanLevel = "off" | "low" | "high";
+
+const missionStories: Record<ScenarioId, { hook: string; why: string; goal: string; checklist: string[]; audio: string }> = {
+  conduction: {
+    hook: "Camp kitchen emergency",
+    why: "A field team needs a hot meal, but the saucepan handle could burn the cook.",
+    goal: "Heat the soup to at least 68°C while keeping the hand grip below 43°C.",
+    checklist: ["Choose a handle material", "Set the burner power", "Use thermal or particle view as evidence"],
+    audio: "/audio/vin-conduction.mp3",
+  },
+  convection: {
+    hook: "Warm a storm-battered cabin",
+    why: "Warm air is collecting near the ceiling while the occupied zone stays cold.",
+    goal: "Reach 22°C with less than 3.5°C difference between the warmest and coolest zones.",
+    checklist: ["Position the heater", "Guide the airflow", "Watch warm air rise and cool air sink"],
+    audio: "/audio/vin-convection.mp3",
+  },
+  radiation: {
+    hook: "Protect a habitat in space",
+    why: "Intense sunlight is heating the crew module, and there is no air outside to carry energy away.",
+    goal: "Keep the sunlit habitat at or below 35°C, including when the chamber is a vacuum.",
+    checklist: ["Choose a surface finish", "Change the distance", "Compare air with a vacuum"],
+    audio: "/audio/vin-radiation.mp3",
+  },
+  mastery: {
+    hook: "Polar rescue power failure",
+    why: "A medical pod must stay safe through a sunlit phase and an icy eclipse using limited power.",
+    goal: "Keep every pod zone near 20–24°C, limit temperature differences, and stay within 30 power units.",
+    checklist: ["Control radiation at the outer shield", "Slow conduction through the walls", "Use convection to even out the air"],
+    audio: "/audio/vin-mastery.mp3",
+  },
+};
 
 const scenarios: Array<{
   id: ScenarioId;
@@ -42,6 +77,18 @@ export default function Home() {
   const [result, setResult] = useState<Result | null>(null);
   const [heatLens, setHeatLens] = useState(true);
   const [particles, setParticles] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [goalOpen, setGoalOpen] = useState(true);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [theme, setTheme] = useState<Theme>("system");
+  const [textScale, setTextScale] = useState<TextScale>(1);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [narrationPlaying, setNarrationPlaying] = useState(false);
+  const [phasePrompt, setPhasePrompt] = useState(false);
+  const [eclipseStarted, setEclipseStarted] = useState(false);
+  const [sunPeak, setSunPeak] = useState(22);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const [handleMaterial, setHandleMaterial] = useState<keyof typeof materials>("steel");
   const [burnerPower, setBurnerPower] = useState(70);
@@ -53,13 +100,51 @@ export default function Home() {
   const [distance, setDistance] = useState(2);
   const [vacuum, setVacuum] = useState(true);
   const [orbitShield, setOrbitShield] = useState<keyof typeof surfaces>("white");
-  const [insulated, setInsulated] = useState(false);
-  const [cabinFan, setCabinFan] = useState(false);
+  const [insulationLevel, setInsulationLevel] = useState<InsulationLevel>("medium");
+  const [cabinFan, setCabinFan] = useState<FanLevel>("low");
+  const [radiatorDeployed, setRadiatorDeployed] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem("heat-lab-preferences");
+      if (saved) {
+        const preferences = JSON.parse(saved);
+        if (["system", "dark", "light"].includes(preferences.theme)) setTheme(preferences.theme);
+        if ([1, 1.15, 1.3].includes(preferences.textScale)) setTextScale(preferences.textScale);
+        setReducedMotion(Boolean(preferences.reducedMotion));
+        setAudioEnabled(Boolean(preferences.audioEnabled));
+      } else {
+        setReducedMotion(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+      }
+    } catch { /* Keep accessible defaults when storage is unavailable. */ }
+  }, []);
+
+  useEffect(() => {
+    const resolvedTheme = theme === "system"
+      ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+      : theme;
+    document.documentElement.dataset.theme = resolvedTheme;
+    document.documentElement.style.setProperty("--text-scale", String(textScale));
+    document.documentElement.classList.toggle("reduce-motion", reducedMotion);
+    window.localStorage.setItem("heat-lab-preferences", JSON.stringify({ theme, textScale, reducedMotion, audioEnabled }));
+  }, [theme, textScale, reducedMotion, audioEnabled]);
+
+  useEffect(() => () => audioRef.current?.pause(), []);
 
   useEffect(() => {
     if (!running) return;
     const timer = window.setInterval(() => {
       setProgress((current) => {
+        if (active === "mastery" && current >= 54 && !eclipseStarted) {
+          const conductance = { low: 1, medium: 0.55, high: 0.28 }[insulationLevel];
+          const peak = 22 + 12 * surfaces[orbitShield].absorption * conductance - (radiatorDeployed ? 5 : 0);
+          setSunPeak(peak);
+          setEclipseStarted(true);
+          setPhasePrompt(true);
+          setRunning(false);
+          window.clearInterval(timer);
+          return 55;
+        }
         if (current >= 100) {
           window.clearInterval(timer);
           return 100;
@@ -68,7 +153,7 @@ export default function Home() {
       });
     }, 70);
     return () => window.clearInterval(timer);
-  }, [running]);
+  }, [running, active, eclipseStarted, insulationLevel, orbitShield, radiatorDeployed]);
 
   const metrics = useMemo(() => {
     const fraction = progress / 100;
@@ -85,11 +170,18 @@ export default function Home() {
     const habitatTemp = 12 + radiantGain * fraction;
 
     const orbitAbsorption = surfaces[orbitShield].absorption;
-    const exteriorTemp = 20 + 58 * orbitAbsorption * fraction;
-    const cabinTemp = 20 + (insulated ? 8 : 19) * orbitAbsorption * fraction - (cabinFan ? 1.2 : 0);
+    const conductance = { low: 1, medium: 0.55, high: 0.28 }[insulationLevel];
+    const isSunlit = progress < 55;
+    const exteriorTemp = isSunlit ? 16 + 62 * orbitAbsorption * fraction * 1.8 : 2 + 16 * conductance;
+    const orbitLow = 22 - 7 * conductance - (radiatorDeployed ? 3 : 0);
+    const cabinTemp = isSunlit
+      ? 22 + 12 * orbitAbsorption * conductance * (fraction / 0.55) - (radiatorDeployed ? 5 : 0)
+      : 22 + (orbitLow - 22) * ((fraction - 0.55) / 0.45);
+    const zoneSpread = { off: 5.8, low: 2.8, high: 1.2 }[cabinFan];
+    const powerUse = { off: 0, low: 8, high: 16 }[cabinFan] + (radiatorDeployed ? 20 : 0);
 
-    return { waterTemp, handleTemp, roomMean, roomSpread, habitatTemp, exteriorTemp, cabinTemp };
-  }, [progress, handleMaterial, burnerPower, heaterPosition, heaterPower, fanOn, ventOpen, surface, distance, orbitShield, insulated, cabinFan]);
+    return { waterTemp, handleTemp, roomMean, roomSpread, habitatTemp, exteriorTemp, cabinTemp, zoneSpread, powerUse, orbitLow, isSunlit };
+  }, [progress, handleMaterial, burnerPower, heaterPosition, heaterPower, fanOn, ventOpen, surface, distance, orbitShield, insulationLevel, cabinFan, radiatorDeployed]);
 
   const outcome = useMemo<Result>(() => {
     if (active === "conduction") {
@@ -110,37 +202,91 @@ export default function Home() {
         ? { success, stars: surface === "silver" && distance <= 2 ? 3 : 2, title: "Habitat protected", explanation: `${surfaces[surface].label} reflects much of the incoming radiation. Electromagnetic waves still cross the ${vacuum ? "vacuum" : "air"}, but less is absorbed.` }
         : { success, stars: 1, title: "Too much radiation absorbed", explanation: `${surfaces[surface].label} absorbs a large fraction of the incoming radiation. Try a shinier surface or increase the distance.` };
     }
-    const success = orbitShield === "silver" && insulated && cabinFan;
+    const success = sunPeak <= 24.5 && metrics.orbitLow >= 19 && metrics.zoneSpread <= 4;
     return success
-      ? { success, stars: 3, title: "Thermal systems balanced", explanation: "The shield reflects radiation, insulation slows conduction through the hull, and the fan drives convection inside the cabin." }
-      : { success, stars: 1, title: "One pathway is still leaking energy", explanation: "Control all three pathways: reflect radiation, slow conduction through the hull, and circulate cabin air by convection." };
-  }, [active, metrics, handleMaterial, heaterPosition, fanOn, surface, distance, vacuum, orbitShield, insulated, cabinFan]);
+      ? { success, stars: metrics.powerUse <= 30 ? 3 : 2, title: "Medical pod protected", explanation: `You balanced the system: radiation control limited the sunlit peak to ${sunPeak.toFixed(1)}°C, insulation slowed conduction, and the fan reduced zone differences by convection.` }
+      : { success, stars: 1, title: "One phase left the pod unsafe", explanation: sunPeak > 24.5 ? "The pod became too warm in sunlight. Reflect more radiation or deploy the radiator before eclipse." : metrics.orbitLow < 19 ? "The pod cooled too far in eclipse. Stow the radiator and strengthen the insulation." : "The average is safe, but the air has uneven hot and cold zones. Increase the cabin fan." };
+  }, [active, metrics, handleMaterial, heaterPosition, fanOn, surface, distance, vacuum, sunPeak]);
 
   useEffect(() => {
     if (progress < 100 || !running) return;
     setRunning(false);
     setResult(outcome);
+    playEffect(outcome.success ? "success" : "retry");
     if (outcome.success) setCompleted((current) => current.includes(active) ? current : [...current, active]);
   }, [progress, running, outcome, active]);
 
   function selectScenario(id: ScenarioId) {
+    audioRef.current?.pause();
+    setNarrationPlaying(false);
     setActive(id);
     setProgress(0);
     setRunning(false);
     setResult(null);
+    setGoalOpen(true);
+    setSupportOpen(false);
+    setPhasePrompt(false);
+    setEclipseStarted(false);
+    setSunPeak(22);
+    playEffect("switch");
   }
 
   function runExperiment() {
     setResult(null);
-    setProgress(0);
+    if (progress >= 100 || progress === 0) {
+      setProgress(0);
+      setEclipseStarted(false);
+      setSunPeak(22);
+    }
     setRunning(true);
+    playEffect("run");
+  }
+
+  function resumeEclipse() {
+    setPhasePrompt(false);
+    setRunning(true);
+    playEffect("switch");
+  }
+
+  function playEffect(kind: "run" | "success" | "retry" | "switch") {
+    if (!audioEnabled) return;
+    try {
+      const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      const context = new AudioContextClass();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      const frequencies = { run: [220, 420], success: [440, 740], retry: [180, 130], switch: [320, 380] }[kind];
+      oscillator.type = kind === "retry" ? "triangle" : "sine";
+      oscillator.frequency.setValueAtTime(frequencies[0], context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(frequencies[1], context.currentTime + 0.18);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.12, context.currentTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.23);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.24);
+    } catch { /* Sound remains optional. */ }
+  }
+
+  function playNarration() {
+    audioRef.current?.pause();
+    if (narrationPlaying) {
+      setNarrationPlaying(false);
+      return;
+    }
+    setAudioEnabled(true);
+    const audio = new Audio(missionStories[active].audio);
+    audioRef.current = audio;
+    audio.onended = () => setNarrationPlaying(false);
+    audio.onerror = () => setNarrationPlaying(false);
+    audio.play().then(() => setNarrationPlaying(true)).catch(() => setNarrationPlaying(false));
   }
 
   const activeScenario = scenarios.find((scenario) => scenario.id === active)!;
   const totalStars = completed.length * 3;
 
   return (
-    <main className="app-shell">
+    <main className="app-shell" data-theme-choice={theme}>
       <header className="topbar">
         <div className="brand-lockup">
           <div className="brand-mark" aria-hidden="true"><span>°</span></div>
@@ -149,12 +295,16 @@ export default function Home() {
             <h1>Heat Transfer Lab</h1>
           </div>
         </div>
-        <div className="top-progress" aria-label={`${completed.length} of 4 missions complete`}>
-          <span className="progress-label">Mission progress</span>
-          <div className="progress-pips">
-            {scenarios.map((scenario) => <span key={scenario.id} className={completed.includes(scenario.id) ? "pip complete" : "pip"} />)}
+        <div className="top-actions">
+          <div className="top-progress" aria-label={`${completed.length} of 4 missions complete`}>
+            <span className="progress-label">Mission progress</span>
+            <div className="progress-pips">
+              {scenarios.map((scenario) => <span key={scenario.id} className={completed.includes(scenario.id) ? "pip complete" : "pip"} />)}
+            </div>
+            <span className="star-score">★ {totalStars}</span>
           </div>
-          <span className="star-score">★ {totalStars}</span>
+          <button className="utility-button" onClick={() => setAudioEnabled(!audioEnabled)} aria-pressed={audioEnabled} aria-label={audioEnabled ? "Turn sound off" : "Turn sound on"}>{audioEnabled ? "🔊" : "🔇"}<span>Sound</span></button>
+          <button className="utility-button" onClick={() => setSettingsOpen(true)}><span aria-hidden="true">Aa</span><span>Accessibility</span></button>
         </div>
       </header>
 
@@ -162,7 +312,7 @@ export default function Home() {
         <img src="/heat-worlds.png" alt="A kitchen pan, a heated room and a sunlit space habitat—the three heat transfer environments" />
         <div className="mission-map-copy">
           <span className="status-dot" />
-          <p><strong>Core rule:</strong> thermal energy transfers from warmer places to cooler places.</p>
+          <p><strong>Your mission:</strong> use evidence to move thermal energy safely from warmer places to cooler places.</p>
         </div>
       </section>
 
@@ -198,9 +348,11 @@ export default function Home() {
             <div>
               <p className="eyebrow">Mission {activeScenario.number}</p>
               <h2>{activeScenario.title}</h2>
-              <p className="mission-brief">{missionBrief(active)}</p>
+              <p className="mission-brief"><strong>{missionStories[active].hook}:</strong> {missionStories[active].why}</p>
             </div>
             <div className="view-toggles" aria-label="Simulation view controls">
+              <button className="goal-button" onClick={() => setGoalOpen(true)}>◎ Mission goal</button>
+              <button className="goal-button" onClick={playNarration}>{narrationPlaying ? "■ Stop audio" : "▶ Listen"}</button>
               <Toggle label="Thermal view" icon="◉" value={heatLens} onChange={setHeatLens} />
               <Toggle label="Particles" icon="⁙" value={particles} onChange={setParticles} />
             </div>
@@ -214,7 +366,7 @@ export default function Home() {
             {active === "conduction" && <ConductionScene metrics={metrics} material={handleMaterial} power={burnerPower} particles={particles} progress={progress} />}
             {active === "convection" && <ConvectionScene metrics={metrics} position={heaterPosition} power={heaterPower} fanOn={fanOn} ventOpen={ventOpen} particles={particles} />}
             {active === "radiation" && <RadiationScene metrics={metrics} surface={surface} distance={distance} vacuum={vacuum} particles={particles} />}
-            {active === "mastery" && <MasteryScene metrics={metrics} shield={orbitShield} insulated={insulated} fan={cabinFan} particles={particles} />}
+            {active === "mastery" && <MasteryScene metrics={metrics} shield={orbitShield} insulation={insulationLevel} fan={cabinFan} radiator={radiatorDeployed} particles={particles} progress={progress} />}
             <div className="timeline" aria-label={`Experiment ${progress}% complete`}>
               <span style={{ width: `${progress}%` }} />
             </div>
@@ -226,9 +378,11 @@ export default function Home() {
               {active === "conduction" && <ConductionControls material={handleMaterial} setMaterial={setHandleMaterial} power={burnerPower} setPower={setBurnerPower} />}
               {active === "convection" && <ConvectionControls position={heaterPosition} setPosition={setHeaterPosition} power={heaterPower} setPower={setHeaterPower} fan={fanOn} setFan={setFanOn} vent={ventOpen} setVent={setVentOpen} />}
               {active === "radiation" && <RadiationControls surface={surface} setSurface={setSurface} distance={distance} setDistance={setDistance} vacuum={vacuum} setVacuum={setVacuum} />}
-              {active === "mastery" && <MasteryControls shield={orbitShield} setShield={setOrbitShield} insulated={insulated} setInsulated={setInsulated} fan={cabinFan} setFan={setCabinFan} />}
+              {active === "mastery" && <MasteryControls shield={orbitShield} setShield={setOrbitShield} insulation={insulationLevel} setInsulation={setInsulationLevel} fan={cabinFan} setFan={setCabinFan} radiator={radiatorDeployed} setRadiator={setRadiatorDeployed} />}
+              <button className="support-button" onClick={() => setSupportOpen(!supportOpen)} aria-expanded={supportOpen}>? {supportOpen ? "Hide mission support" : "Show mission support"}</button>
+              {supportOpen && <div className="support-panel"><strong>Try this strategy</strong><ol>{missionStories[active].checklist.map((item) => <li key={item}>{item}</li>)}</ol><p>You can pause, change a setting and test again. There is no penalty for exploring.</p></div>}
               <button className="run-button" onClick={runExperiment} disabled={running}>
-                <span>{running ? "Experiment in progress…" : progress === 100 ? "Run again" : "Run experiment"}</span>
+                <span>{running ? "Experiment in progress…" : progress === 55 && active === "mastery" ? "Continue into eclipse" : progress === 100 ? "Run again" : "Run experiment"}</span>
                 <i aria-hidden="true">{running ? "●" : "▶"}</i>
               </button>
             </section>
@@ -257,6 +411,53 @@ export default function Home() {
           </div>
         </section>
       </div>
+
+      {goalOpen && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="mission-modal" role="dialog" aria-modal="true" aria-labelledby="mission-modal-title">
+            <div className="modal-kicker"><span>{activeScenario.icon}</span> Mission {activeScenario.number} • {activeScenario.subtitle}</div>
+            <h2 id="mission-modal-title">{missionStories[active].hook}</h2>
+            <p className="modal-story">{missionStories[active].why}</p>
+            <div className="goal-callout"><small>Your goal</small><strong>{missionStories[active].goal}</strong></div>
+            <ul className="mission-checklist">{missionStories[active].checklist.map((item) => <li key={item}><span>✓</span>{item}</li>)}</ul>
+            <div className="modal-actions">
+              <button className="secondary-action" onClick={playNarration}>{narrationPlaying ? "■ Stop Vin" : "▶ Listen with Vin"}</button>
+              <button className="primary-action" onClick={() => { setGoalOpen(false); playEffect("switch"); }}>Start mission <span>→</span></button>
+            </div>
+            <p className="choice-note">Choose the views and supports that work best for you. You can replay without penalty.</p>
+          </section>
+        </div>
+      )}
+
+      {phasePrompt && (
+        <div className="modal-backdrop" role="presentation">
+          <section className="mission-modal phase-modal" role="dialog" aria-modal="true" aria-labelledby="phase-title">
+            <div className="modal-kicker"><span>❄</span> Environment change</div>
+            <h2 id="phase-title">Eclipse incoming</h2>
+            <p className="modal-story">Sunlight has disappeared. The radiator that helped in sunlight may now cool the pod too far.</p>
+            <div className="goal-callout"><small>Sunlit peak</small><strong>{sunPeak.toFixed(1)}°C • Target was 24.5°C or lower</strong></div>
+            <p className="phase-advice">Adjust the radiator, insulation or fan before continuing. A fan redistributes energy—it does not remove it.</p>
+            <div className="modal-actions"><button className="primary-action" onClick={resumeEclipse}>Continue into eclipse <span>→</span></button></div>
+          </section>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setSettingsOpen(false); }}>
+          <aside className="settings-drawer" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+            <div className="settings-heading"><div><p className="eyebrow">Choose what helps you learn</p><h2 id="settings-title">Accessibility</h2></div><button className="close-button" onClick={() => setSettingsOpen(false)} aria-label="Close accessibility settings">×</button></div>
+            <p className="settings-intro">Your choices are saved on this device. Colour is always paired with labels, values and motion.</p>
+            <Segmented value={theme} label="Colour theme" onChange={setTheme} options={[{ value: "system", label: "System" }, { value: "dark", label: "Dark" }, { value: "light", label: "Light" }]} />
+            <Segmented value={textScale} label="Text size" onChange={setTextScale} options={[{ value: 1, label: "Standard" }, { value: 1.15, label: "Large" }, { value: 1.3, label: "Extra large" }]} />
+            <div className="settings-options">
+              <Toggle label="Reduce movement" icon="◫" value={reducedMotion} onChange={setReducedMotion} />
+              <Toggle label="Sound effects" icon="♫" value={audioEnabled} onChange={setAudioEnabled} />
+            </div>
+            <div className="udl-note"><strong>Designed for learner agency</strong><span>Choose audio, text size, theme, views, hints and pace. Every mission has a clear purpose and multiple ways to notice the science.</span></div>
+            <button className="primary-action full" onClick={() => setSettingsOpen(false)}>Save and return</button>
+          </aside>
+        </div>
+      )}
     </main>
   );
 }
@@ -265,7 +466,7 @@ function Toggle({ label, icon, value, onChange }: { label: string; icon: string;
   return <button className={`toggle ${value ? "on" : ""}`} onClick={() => onChange(!value)} aria-pressed={value}><span>{icon}</span>{label}<i /></button>;
 }
 
-function Segmented<T extends string>({ value, options, onChange, label }: { value: T; options: Array<{ value: T; label: string }>; onChange: (value: T) => void; label: string }) {
+function Segmented<T extends string | number>({ value, options, onChange, label }: { value: T; options: Array<{ value: T; label: string }>; onChange: (value: T) => void; label: string }) {
   return <div className="field"><label>{label}</label><div className="segmented">{options.map((option) => <button key={option.value} className={value === option.value ? "selected" : ""} onClick={() => onChange(option.value)}>{option.label}</button>)}</div></div>;
 }
 
@@ -285,11 +486,16 @@ function RadiationControls({ surface, setSurface, distance, setDistance, vacuum,
   return <div className="controls-stack"><Segmented value={surface} label="Habitat surface" onChange={setSurface} options={Object.entries(surfaces).map(([value, item]) => ({ value: value as keyof typeof surfaces, label: item.label }))} /><RangeControl label="Distance from source" value={distance} min={1} max={4} unit="×" onChange={setDistance} /><div className="inline-switches"><Toggle label="Vacuum chamber" icon="○" value={vacuum} onChange={setVacuum} /></div></div>;
 }
 
-function MasteryControls({ shield, setShield, insulated, setInsulated, fan, setFan }: { shield: keyof typeof surfaces; setShield: (v: keyof typeof surfaces) => void; insulated: boolean; setInsulated: (v: boolean) => void; fan: boolean; setFan: (v: boolean) => void }) {
-  return <div className="controls-stack"><Segmented value={shield} label="Outer shield" onChange={setShield} options={Object.entries(surfaces).map(([value, item]) => ({ value: value as keyof typeof surfaces, label: item.label }))} /><div className="inline-switches"><Toggle label="Hull insulation" icon="▦" value={insulated} onChange={setInsulated} /><Toggle label="Cabin fan" icon="↻" value={fan} onChange={setFan} /></div></div>;
+function MasteryControls({ shield, setShield, insulation, setInsulation, fan, setFan, radiator, setRadiator }: { shield: keyof typeof surfaces; setShield: (v: keyof typeof surfaces) => void; insulation: InsulationLevel; setInsulation: (v: InsulationLevel) => void; fan: FanLevel; setFan: (v: FanLevel) => void; radiator: boolean; setRadiator: (v: boolean) => void }) {
+  return <div className="controls-stack mastery-controls">
+    <Segmented value={shield} label="Outer shield • controls radiation" onChange={setShield} options={Object.entries(surfaces).map(([value, item]) => ({ value: value as keyof typeof surfaces, label: item.label }))} />
+    <Segmented value={insulation} label="Wall insulation • slows conduction" onChange={setInsulation} options={[{ value: "low", label: "Low" }, { value: "medium", label: "Medium" }, { value: "high", label: "High" }]} />
+    <Segmented value={fan} label="Cabin fan • evens convection" onChange={setFan} options={[{ value: "off", label: "Off" }, { value: "low", label: "Low" }, { value: "high", label: "High" }]} />
+    <div className="inline-switches"><Toggle label="Radiator panel" icon="▤" value={radiator} onChange={setRadiator} /></div>
+  </div>;
 }
 
-type Metrics = { waterTemp: number; handleTemp: number; roomMean: number; roomSpread: number; habitatTemp: number; exteriorTemp: number; cabinTemp: number };
+type Metrics = { waterTemp: number; handleTemp: number; roomMean: number; roomSpread: number; habitatTemp: number; exteriorTemp: number; cabinTemp: number; zoneSpread: number; powerUse: number; orbitLow: number; isSunlit: boolean };
 
 function TempTag({ label, value, className = "" }: { label: string; value: number; className?: string }) {
   return <div className={`temp-tag ${className}`}><span>{label}</span><strong>{Math.round(value)}°C</strong></div>;
@@ -299,10 +505,9 @@ function ConductionScene({ metrics, material, power, particles, progress }: { me
   return <div className="scene conduction-scene">
     <div className="scene-copy"><span>CONDUCTION</span><strong>Energy is passed from particle to particle</strong></div>
     <TempTag label="Water" value={metrics.waterTemp} className="water-temp" /><TempTag label="Grip" value={metrics.handleTemp} className="handle-temp" />
-    <div className="pot"><div className="water" style={{ opacity: 0.35 + progress / 200 }} /><div className="pot-rim" /><div className="pan-handle" style={{ background: materials[material].tone }}>{particles && Array.from({ length: 12 }).map((_, i) => <i key={i} className="solid-particle" style={{ "--i": i, "--heat": Math.max(0, progress / 10 - i) } as React.CSSProperties} />)}</div></div>
-    <div className="burner"><div className="flame-ring" style={{ opacity: power / 100 }} /></div>
-    <div className="bench" />
-    <div className="transfer-label"><i>→</i> particle collisions transfer energy</div>
+    <div className="model-flame-glow" style={{ opacity: power / 100 }} />
+    <div className="model-handle-path" style={{ "--material": materials[material].tone } as React.CSSProperties}>{particles && Array.from({ length: 13 }).map((_, i) => <i key={i} className="solid-particle" style={{ "--i": i, "--heat": Math.max(0, progress / 9 - i) } as React.CSSProperties} />)}</div>
+    <div className="transfer-label"><i>→</i> collisions pass energy along the solid</div>
   </div>;
 }
 
@@ -311,9 +516,8 @@ function ConvectionScene({ metrics, position, power, fanOn, ventOpen, particles 
   return <div className="scene convection-scene">
     <div className="scene-copy"><span>CONVECTION</span><strong>Moving fluids carry thermal energy</strong></div>
     <TempTag label="Average" value={metrics.roomMean} className="room-temp" /><TempTag label="Difference" value={metrics.roomSpread} className="spread-temp" />
-    <div className="window"><div className="moon" /></div><div className="floor-line" />
-    <div className="heater" style={{ bottom, opacity: 0.45 + power / 180 }}><i /><i /><i /></div>
-    <div className={`vent ${ventOpen ? "open" : ""}`}><i /><i /><i /></div>
+    <div className="heater-beacon" style={{ bottom, opacity: 0.45 + power / 180 }}><span>HEATER</span></div>
+    <div className={`vent-state ${ventOpen ? "open" : ""}`}>{ventOpen ? "VENT OPEN" : "VENT CLOSED"}</div>
     {fanOn && <div className="fan"><i>✣</i></div>}
     <div className="convection-loop"><span className="warm-arrow">↑ <b>warm rises</b></span><span className="top-arrow">→</span><span className="cool-arrow">↓ <b>cool sinks</b></span><span className="bottom-arrow">←</span></div>
     {particles && Array.from({ length: 18 }).map((_, i) => <i key={i} className={`air-particle ${i % 2 ? "warm" : "cool"}`} style={{ "--i": i } as React.CSSProperties} />)}
@@ -324,26 +528,23 @@ function RadiationScene({ metrics, surface, distance, vacuum, particles }: { met
   return <div className="scene radiation-scene">
     <div className="scene-copy"><span>RADIATION</span><strong>Electromagnetic waves need no particles</strong></div>
     <div className="space-label">{vacuum ? "VACUUM • NO PARTICLES" : "AIR PRESENT"}</div><TempTag label="Habitat" value={metrics.habitatTemp} className="habitat-temp" />
-    <div className="sun"><i /></div>
-    <div className="radiant-path" style={{ width: `${44 + distance * 5}%` }}>{particles && Array.from({ length: 5 }).map((_, i) => <i key={i} className="rad-wave" style={{ "--i": i } as React.CSSProperties} />)}<span>radiant energy →</span></div>
-    <div className="planet" />
-    <div className="habitat" style={{ background: surfaces[surface].tone, right: `${7 - distance}%` }}><div className="habitat-window" /><div className="habitat-leg left" /><div className="habitat-leg right" /></div>
+    <div className="radiant-path" style={{ width: `${44 + distance * 5}%` }}>{particles && Array.from({ length: 6 }).map((_, i) => <i key={i} className="rad-wave" style={{ "--i": i } as React.CSSProperties} />)}<span>radiant energy travels through {vacuum ? "empty space" : "air"} →</span></div>
+    <div className="shield-panel" style={{ background: surfaces[surface].tone, transform: `translateX(${distance * 10}px) rotateY(-18deg)` }}><span>{surfaces[surface].label}</span></div>
     <div className="reflection" style={{ opacity: 1 - surfaces[surface].absorption }}>↗ reflected</div>
   </div>;
 }
 
-function MasteryScene({ metrics, shield, insulated, fan, particles }: { metrics: Metrics; shield: keyof typeof surfaces; insulated: boolean; fan: boolean; particles: boolean }) {
+function MasteryScene({ metrics, shield, insulation, fan, radiator, particles, progress }: { metrics: Metrics; shield: keyof typeof surfaces; insulation: InsulationLevel; fan: FanLevel; radiator: boolean; particles: boolean; progress: number }) {
   return <div className="scene mastery-scene">
-    <div className="scene-copy"><span>MIXED SYSTEM</span><strong>Three pathways. One balanced habitat.</strong></div>
-    <TempTag label="Outer hull" value={metrics.exteriorTemp} className="outer-temp" /><TempTag label="Cabin" value={metrics.cabinTemp} className="cabin-temp" />
-    <div className="mini-sun" />
-    <div className="master-radiation">{particles && <><i /><i /><i /></>}<span>RADIATION</span></div>
-    <div className={`cutaway-habitat ${insulated ? "insulated" : ""}`} style={{ borderColor: surfaces[shield].tone }}>
-      <div className="hull-layer"><span>CONDUCTION</span>{particles && Array.from({ length: 8 }).map((_, i) => <i key={i} />)}</div>
-      <div className="cabin-loop"><span>CONVECTION</span><i className={fan ? "moving" : ""}>↻</i></div>
-      <div className="crew-zone">Comfort zone<br /><strong>20–24°C</strong></div>
-    </div>
-    <div className="system-tags"><span className={shield === "silver" ? "active" : ""}>Reflect</span><span className={insulated ? "active" : ""}>Insulate</span><span className={fan ? "active" : ""}>Circulate</span></div>
+    <div className="scene-copy"><span>MIXED CHALLENGE</span><strong>Protect the medical pod through sunlight and eclipse</strong></div>
+    <div className={`phase-chip ${metrics.isSunlit ? "sunlit" : "eclipse"}`}>{metrics.isSunlit ? "☀ SUNLIGHT" : "❄ ECLIPSE"} • {Math.round(progress)}%</div>
+    <TempTag label="Outside" value={metrics.exteriorTemp} className="outer-temp" /><TempTag label="Pod average" value={metrics.cabinTemp} className="cabin-temp" />
+    <div className="mixed-readouts"><span>Zone difference <strong>{metrics.zoneSpread.toFixed(1)}°C</strong></span><span>Power <strong>{metrics.powerUse}/30</strong></span></div>
+    <div className="pod-shield" style={{ borderColor: surfaces[shield].tone }}><span>{surfaces[shield].label}</span></div>
+    <div className={`wall-conduction insulation-${insulation}`}>{particles && Array.from({ length: 7 }).map((_, i) => <i key={i} />)}<span>CONDUCTION</span></div>
+    <div className={`pod-convection fan-${fan}`}><i>↻</i><span>CONVECTION</span></div>
+    <div className={`radiator-model ${radiator ? "deployed" : ""}`}><span>RADIATOR</span></div>
+    <div className="system-tags"><span className={shield === "silver" || shield === "white" ? "active" : ""}>Radiation</span><span className={insulation === "high" ? "active" : ""}>Conduction</span><span className={fan !== "off" ? "active" : ""}>Convection</span></div>
   </div>;
 }
 
