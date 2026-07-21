@@ -15,28 +15,28 @@ const missionStories: Record<ScenarioId, { hook: string; why: string; goal: stri
     why: "A field team needs a hot meal, but the saucepan handle could burn the cook.",
     goal: "Heat the soup to at least 68°C while keeping the hand grip below 43°C.",
     checklist: ["Choose a handle material", "Set the burner power", "Use thermal or particle view as evidence"],
-    audio: "/audio/vin-conduction.mp3",
+    audio: "/audio/mr-cisneros-conduction.mp3",
   },
   convection: {
     hook: "Warm a storm-battered cabin",
     why: "Warm air is collecting near the ceiling while the occupied zone stays cold.",
     goal: "Reach 22°C with less than 3.5°C difference between the warmest and coolest zones.",
     checklist: ["Position the heater", "Guide the airflow", "Watch warm air rise and cool air sink"],
-    audio: "/audio/vin-convection.mp3",
+    audio: "/audio/mr-cisneros-convection.mp3",
   },
   radiation: {
     hook: "Protect a habitat in space",
     why: "Intense sunlight is heating the crew module, and there is no air outside to carry energy away.",
     goal: "Keep the sunlit habitat at or below 35°C, including when the chamber is a vacuum.",
     checklist: ["Choose a surface finish", "Change the distance", "Compare air with a vacuum"],
-    audio: "/audio/vin-radiation.mp3",
+    audio: "/audio/mr-cisneros-radiation.mp3",
   },
   mastery: {
     hook: "Polar rescue power failure",
     why: "A medical pod must stay safe through a sunlit phase and an icy eclipse using limited power.",
     goal: "Keep every pod zone near 20–24°C, limit temperature differences, and stay within 30 power units.",
     checklist: ["Control radiation at the outer shield", "Slow conduction through the walls", "Use convection to even out the air"],
-    audio: "/audio/vin-mastery.mp3",
+    audio: "/audio/mr-cisneros-mastery.mp3",
   },
 };
 
@@ -421,7 +421,7 @@ export default function Home() {
             <div className="goal-callout"><small>Your goal</small><strong>{missionStories[active].goal}</strong></div>
             <ul className="mission-checklist">{missionStories[active].checklist.map((item) => <li key={item}><span>✓</span>{item}</li>)}</ul>
             <div className="modal-actions">
-              <button className="secondary-action" onClick={playNarration}>{narrationPlaying ? "■ Stop Vin" : "▶ Listen with Vin"}</button>
+              <button className="secondary-action" onClick={playNarration}>{narrationPlaying ? "■ Stop Mr. Cisneros" : "▶ Listen with Mr. Cisneros"}</button>
               <button className="primary-action" onClick={() => { setGoalOpen(false); playEffect("switch"); }}>Start mission <span>→</span></button>
             </div>
             <p className="choice-note">Choose the views and supports that work best for you. You can replay without penalty.</p>
