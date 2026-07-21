@@ -222,7 +222,7 @@
   min-height: 350px;
   position: relative;
   overflow: hidden;
-  background: #07111e url("/og-change-lab.png") center / cover no-repeat;
+  background: #07111e var(--featured-art) center / cover no-repeat;
 }
 .featuredVisual::after {
   content: "";

@@ -2,6 +2,8 @@
 
 ChangeLab is an interactive simulation website for the NSW Year 8 Science topic **Change**. It helps students investigate scientific systems by changing variables and observing visual evidence rather than completing worksheet-style questions.
 
+**Student website:** [irvincisneros-png.github.io/changelab-year-8-science](https://irvincisneros-png.github.io/changelab-year-8-science/)
+
 ![ChangeLab energy systems](public/og-change-lab.png)
 
 ## Simulations

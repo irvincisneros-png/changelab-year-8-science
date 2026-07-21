@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { assetPath } from "@/src/asset-path";
 import styles from "./change-lab.module.css";
 
 const pathways = [
@@ -117,7 +118,12 @@ export default function Home() {
               <Link className={styles.buttonSecondary} href="/play/7-1-1">Open Heat Transfer</Link>
             </div>
           </div>
-          <div className={styles.featuredVisual} role="img" aria-label="ChangeLab energy systems: a rover, lifted crate, spring, insulated pod and battery" />
+          <div
+            className={styles.featuredVisual}
+            role="img"
+            aria-label="ChangeLab energy systems: a rover, lifted crate, spring, insulated pod and battery"
+            style={{ "--featured-art": `url("${assetPath("/og-change-lab.png")}")` } as React.CSSProperties}
+          />
         </div>
       </section>
     </main>

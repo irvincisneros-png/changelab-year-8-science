@@ -13,6 +13,7 @@ import {
   type StoreId,
 } from "@/src/energy-stores/engine.mjs";
 import { ENERGY_STORE_MISSIONS, getEnergyStoreMission, type EnergyStoreMissionId } from "@/src/energy-stores/content";
+import { assetPath } from "@/src/asset-path";
 import styles from "./EnergyVault.module.css";
 
 type Theme = "system" | "dark" | "light";
@@ -27,12 +28,12 @@ const missionColours: Record<EnergyStoreMissionId, string> = {
   kinetic: "#55cfea", gravitational: "#9b8cff", elastic: "#ffb547", thermal: "#ff6b4a", chemical: "#57d38c", vault: "#f17fd4",
 };
 const narration: Record<EnergyStoreMissionId, string> = {
-  kinetic: "/audio/mr-cisneros-energy-kinetic.mp3",
-  gravitational: "/audio/mr-cisneros-energy-gravitational.mp3",
-  elastic: "/audio/mr-cisneros-energy-elastic.mp3",
-  thermal: "/audio/mr-cisneros-energy-thermal.mp3",
-  chemical: "/audio/mr-cisneros-energy-chemical.mp3",
-  vault: "/audio/mr-cisneros-energy-vault.mp3",
+  kinetic: assetPath("/audio/mr-cisneros-energy-kinetic.mp3"),
+  gravitational: assetPath("/audio/mr-cisneros-energy-gravitational.mp3"),
+  elastic: assetPath("/audio/mr-cisneros-energy-elastic.mp3"),
+  thermal: assetPath("/audio/mr-cisneros-energy-thermal.mp3"),
+  chemical: assetPath("/audio/mr-cisneros-energy-chemical.mp3"),
+  vault: assetPath("/audio/mr-cisneros-energy-vault.mp3"),
 };
 
 const storeChoices: Array<{ id: StoreId | "heating" | "radiation"; label: string; clue: string }> = [

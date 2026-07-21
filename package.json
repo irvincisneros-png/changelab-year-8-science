@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext dev",
     "build": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext build",
+    "build:pages": "GITHUB_PAGES=true NEXT_PUBLIC_BASE_PATH=${NEXT_PUBLIC_BASE_PATH:-/changelab-year-8-science} NEXT_PUBLIC_SITE_URL=${NEXT_PUBLIC_SITE_URL:-https://irvincisneros-png.github.io} next build",
     "start": "WRANGLER_LOG_PATH=.wrangler/wrangler.log vinext start",
     "test": "npm run build && node --test tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
