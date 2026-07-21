@@ -288,7 +288,7 @@ html[data-theme="light"] .mission-modal { background: linear-gradient(145deg, #f
 .energy-rule { font-size: .72rem; line-height: 1.5; }
 
 .sim-stage { perspective: 1100px; background: #07101d; }
-.scene { transform-style: preserve-3d; background-image: linear-gradient(rgba(5,10,18,.16), rgba(5,10,18,.42)), url("/heat-scenes-3d.png") !important; background-size: 200% 200% !important; background-repeat: no-repeat !important; }
+.scene { transform-style: preserve-3d; background-image: linear-gradient(rgba(5,10,18,.16), rgba(5,10,18,.42)), var(--heat-scenes-art) !important; background-size: 200% 200% !important; background-repeat: no-repeat !important; }
 .is-running .scene { animation: camera-breathe 9s var(--ease-in-out) infinite alternate; }
 .conduction-scene { background-position: 0 0 !important; }
 .convection-scene { background-position: 100% 0 !important; }

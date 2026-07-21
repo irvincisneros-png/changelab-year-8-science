@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { assetPath } from "@/src/asset-path";
 
 type ScenarioId = "conduction" | "convection" | "radiation" | "mastery";
 type Result = { success: boolean; title: string; explanation: string; stars: number };
@@ -15,28 +16,28 @@ const missionStories: Record<ScenarioId, { hook: string; why: string; goal: stri
     why: "A field team needs a hot meal, but the saucepan handle could burn the cook.",
     goal: "Heat the soup to at least 68°C while keeping the hand grip below 43°C.",
     checklist: ["Choose a handle material", "Set the burner power", "Use thermal or particle view as evidence"],
-    audio: "/audio/mr-cisneros-conduction.mp3",
+    audio: assetPath("/audio/mr-cisneros-conduction.mp3"),
   },
   convection: {
     hook: "Warm a storm-battered cabin",
     why: "Warm air is collecting near the ceiling while the occupied zone stays cold.",
     goal: "Reach 22°C with less than 3.5°C difference between the warmest and coolest zones.",
     checklist: ["Position the heater", "Guide the airflow", "Watch warm air rise and cool air sink"],
-    audio: "/audio/mr-cisneros-convection.mp3",
+    audio: assetPath("/audio/mr-cisneros-convection.mp3"),
   },
   radiation: {
     hook: "Protect a habitat in space",
     why: "Intense sunlight is heating the crew module, and there is no air outside to carry energy away.",
     goal: "Keep the sunlit habitat at or below 35°C, including when the chamber is a vacuum.",
     checklist: ["Choose a surface finish", "Change the distance", "Compare air with a vacuum"],
-    audio: "/audio/mr-cisneros-radiation.mp3",
+    audio: assetPath("/audio/mr-cisneros-radiation.mp3"),
   },
   mastery: {
     hook: "Polar rescue power failure",
     why: "A medical pod must stay safe through a sunlit phase and an icy eclipse using limited power.",
     goal: "Keep every pod zone near 20–24°C, limit temperature differences, and stay within 30 power units.",
     checklist: ["Control radiation at the outer shield", "Slow conduction through the walls", "Use convection to even out the air"],
-    audio: "/audio/mr-cisneros-mastery.mp3",
+    audio: assetPath("/audio/mr-cisneros-mastery.mp3"),
   },
 };
 
@@ -292,7 +293,11 @@ export default function HeatTransferLab() {
   const totalStars = completed.length * 3;
 
   return (
-    <main className="app-shell" data-theme-choice={theme}>
+    <main
+      className="app-shell"
+      data-theme-choice={theme}
+      style={{ "--heat-scenes-art": `url("${assetPath("/heat-scenes-3d.png")}")` } as React.CSSProperties}
+    >
       <header className="topbar">
         <div className="brand-lockup">
           <div className="brand-mark" aria-hidden="true"><span>°</span></div>
@@ -315,7 +320,7 @@ export default function HeatTransferLab() {
       </header>
 
       <section className="mission-map" aria-label="Heat transfer mission environments">
-        <img src="/heat-worlds.png" alt="A kitchen pan, a heated room and a sunlit space habitat—the three heat transfer environments" />
+        <img src={assetPath("/heat-worlds.png")} alt="A kitchen pan, a heated room and a sunlit space habitat—the three heat transfer environments" />
         <div className="mission-map-copy">
           <span className="status-dot" />
           <p><strong>Your mission:</strong> use evidence to move thermal energy safely from warmer places to cooler places.</p>
