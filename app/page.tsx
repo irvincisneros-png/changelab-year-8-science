@@ -57,6 +57,7 @@ function Footer() {
     <div className={`${styles.footerRow} ${styles.frame}`}>
       <span><strong>ChangeLab</strong> · NSW Year 8 Science</span>
       <Link href="/play">Browse the outcome catalogue →</Link>
+      <a href="https://irvincisneros-png.github.io/">← Learning Hub</a>
     </div>
   </footer>;
 }
